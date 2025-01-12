@@ -69,7 +69,7 @@ variable "ubuntu-2204-lts" {
 variable "token" {
   type        = string
   description = "OAuth-token; https://cloud.yandex.ru/docs/iam/concepts/authorization/oauth-token"
-  default = "t1.9euelZqPx5KazJ6Om5GUjMqOlZyYye3rnpWakpeTmJmelJCLjouZxovHlY3l9Pc4LHJD-e8PFVbY3fT3eFpvQ_nvDxVW2M3n9euelZqRnIuVi5mXnMnLy5uOzInNiu_8xeuelZqRnIuVi5mXnMnLy5uOzInNig.1ntAZgnUUGgryuDY-fMSUP7DsMpX19WdcN6St62yO7KnGL6iJdjDk6xYuVwFdcQgnJJ9X0aY9OgdZVylpy0-BA"
+  default = ""
 }
 
 # ## Переменная для cloud_id
