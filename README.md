@@ -49,7 +49,99 @@
 
 1. Terraform сконфигурирован и создание инфраструктуры посредством Terraform возможно без дополнительных ручных действий, стейт основной конфигурации сохраняется в бакете или Terraform Cloud
 2. Полученная конфигурация инфраструктуры является предварительной, поэтому в ходе дальнейшего выполнения задания возможны изменения.
+## Решение:
+Написал Конфигурацию [Terraform-for-backet](https://www.terraform.io/) для  создания сервисного аккаунта, который будет в дальнейшем использоваться Terraform для работы с инфраструктурой с необходимыми и достаточными правами.
+```hcl
+resource "yandex_iam_service_account" "sa" {
+  name = "sa-for-bucket"
+}
 
+# Назначение роли сервисному аккаунту
+resource "yandex_resourcemanager_folder_iam_member" "sa-editor" {
+  folder_id = var.folder_id
+  role      = "storage.editor"
+  member    = "serviceAccount:${yandex_iam_service_account.sa.id}"
+}
+
+# Создание статического ключа доступа
+resource "yandex_iam_service_account_static_access_key" "sa-static-key" {
+  service_account_id = yandex_iam_service_account.sa.id
+}
+
+# Создание бакета с использованием ключа
+resource "yandex_storage_bucket" "tstate" {
+  access_key = yandex_iam_service_account_static_access_key.sa-static-key.access_key
+  secret_key = yandex_iam_service_account_static_access_key.sa-static-key.secret_key
+  bucket     = "bucket-suntsovvv-2025"
+  acl    = "private"
+  force_destroy = true
+```
+Так же в ней создается файл конфигурации для для подключения бэкенда терраформ к s3 backet.
+```hcl
+# Создание файла конфигурации для подключения бэкэнда terraform к S3
+resource "local_file" "backend" {
+  content  = <<EOT
+bucket = "${yandex_storage_bucket.tstate.bucket}"
+region = "ru-central1"
+key = "terraform.tfstate"
+access_key = "${yandex_iam_service_account_static_access_key.sa-static-key.access_key}"
+secret_key = "${yandex_iam_service_account_static_access_key.sa-static-key.secret_key}"
+EOT
+  filename = "../terraform/secret.backend.tfvars"
+
+}
+```
+Вотдельной папке создал конфигурацию [Terraform](https://www.terraform.io/), используя созданный бакет ранее как бекенд для хранения стейт файла. 
+```hcl
+terraform {
+backend "s3" {
+endpoint  = "https://storage.yandexcloud.net" 
+skip_region_validation = true
+skip_credentials_validation = true
+skip_requesting_account_id  = true # необходимая опция при описании бэкенда для Terraform версии 1.6.1 и старше.
+skip_s3_checksum            = true # необходимая опция при описании бэкенда для Terraform версии 1.6.3 и старше.
+}
+}
+  
+```
+Для инициализации конфигурации неообходимо использовать команду c указанием файла конфигурации , полученного при выполнении конфигурации Terraform-for-backet.
+```bash
+user@microk8s:~/devops-diploma-netology/terraform$ terraform init -backend-config secret.backend.tfvars 
+Initializing the backend...
+
+Successfully configured the backend "s3"! Terraform will automatically
+use this backend unless the backend configuration changes.
+Initializing provider plugins...
+- Finding latest version of yandex-cloud/yandex...
+- Installing yandex-cloud/yandex v0.135.0...
+- Installed yandex-cloud/yandex v0.135.0 (unauthenticated)
+Terraform has created a lock file .terraform.lock.hcl to record the provider
+selections it made above. Include this file in your version control repository
+so that Terraform can guarantee to make the same selections by default when
+you run "terraform init" in the future.
+
+╷
+│ Warning: Incomplete lock file information for providers
+│ 
+│ Due to your customized provider installation methods, Terraform was forced to calculate lock file checksums locally for the following providers:
+│   - yandex-cloud/yandex
+│ 
+│ The current .terraform.lock.hcl file only includes checksums for linux_amd64, so Terraform running on another platform will fail to install these providers.
+│ 
+│ To calculate additional checksums for another platform, run:
+│   terraform providers lock -platform=linux_amd64
+│ (where linux_amd64 is the platform to generate)
+╵
+Terraform has been successfully initialized!
+
+You may now begin working with Terraform. Try running "terraform plan" to see
+any changes that are required for your infrastructure. All Terraform commands
+should now work.
+
+If you ever set or change modules or backend configuration for Terraform,
+rerun this command to reinitialize your working directory. If you forget, other
+commands will detect it and remind you to do so if necessary.
+```
 ---
 ### Создание Kubernetes кластера
 
