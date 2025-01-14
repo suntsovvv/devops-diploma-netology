@@ -49,6 +49,294 @@
 
 1. Terraform сконфигурирован и создание инфраструктуры посредством Terraform возможно без дополнительных ручных действий, стейт основной конфигурации сохраняется в бакете или Terraform Cloud
 2. Полученная конфигурация инфраструктуры является предварительной, поэтому в ходе дальнейшего выполнения задания возможны изменения.
+## Решение:
+Написал Конфигурацию [Terraform-for-backet](https://www.terraform.io/) для  создания сервисного аккаунта, который будет в дальнейшем использоваться Terraform для работы с инфраструктурой с необходимыми и достаточными правами.
+```hcl
+resource "yandex_iam_service_account" "sa" {
+  name = "sa-for-bucket"
+}
+
+# Назначение роли сервисному аккаунту
+resource "yandex_resourcemanager_folder_iam_member" "sa-editor" {
+  folder_id = var.folder_id
+  role      = "storage.editor"
+  member    = "serviceAccount:${yandex_iam_service_account.sa.id}"
+}
+
+# Создание статического ключа доступа
+resource "yandex_iam_service_account_static_access_key" "sa-static-key" {
+  service_account_id = yandex_iam_service_account.sa.id
+}
+
+# Создание бакета с использованием ключа
+resource "yandex_storage_bucket" "tstate" {
+  access_key = yandex_iam_service_account_static_access_key.sa-static-key.access_key
+  secret_key = yandex_iam_service_account_static_access_key.sa-static-key.secret_key
+  bucket     = "bucket-suntsovvv-2025"
+  acl    = "private"
+  force_destroy = true
+```
+Так же в ней создается файл конфигурации для для подключения бэкенда терраформ к s3 backet.
+```hcl
+# Создание файла конфигурации для подключения бэкэнда terraform к S3
+resource "local_file" "backend" {
+  content  = <<EOT
+bucket = "${yandex_storage_bucket.tstate.bucket}"
+region = "ru-central1"
+key = "terraform.tfstate"
+access_key = "${yandex_iam_service_account_static_access_key.sa-static-key.access_key}"
+secret_key = "${yandex_iam_service_account_static_access_key.sa-static-key.secret_key}"
+EOT
+  filename = "../terraform/secret.backend.tfvars"
+
+}
+```
+Вотдельной папке создал конфигурацию [Terraform](https://www.terraform.io/), используя созданный бакет ранее как бекенд для хранения стейт файла. 
+```hcl
+terraform {
+backend "s3" {
+endpoint  = "https://storage.yandexcloud.net" 
+skip_region_validation = true
+skip_credentials_validation = true
+skip_requesting_account_id  = true # необходимая опция при описании бэкенда для Terraform версии 1.6.1 и старше.
+skip_s3_checksum            = true # необходимая опция при описании бэкенда для Terraform версии 1.6.3 и старше.
+}
+}
+  
+```
+Для инициализации конфигурации неообходимо использовать команду c указанием файла конфигурации , полученного при выполнении конфигурации Terraform-for-backet.
+```bash
+user@microk8s:~/devops-diploma-netology/terraform$ terraform init -backend-config secret.backend.tfvars 
+Initializing the backend...
+
+Successfully configured the backend "s3"! Terraform will automatically
+use this backend unless the backend configuration changes.
+Initializing provider plugins...
+- Finding latest version of yandex-cloud/yandex...
+- Installing yandex-cloud/yandex v0.135.0...
+- Installed yandex-cloud/yandex v0.135.0 (unauthenticated)
+Terraform has created a lock file .terraform.lock.hcl to record the provider
+selections it made above. Include this file in your version control repository
+so that Terraform can guarantee to make the same selections by default when
+you run "terraform init" in the future.
+
+╷
+│ Warning: Incomplete lock file information for providers
+│ 
+│ Due to your customized provider installation methods, Terraform was forced to calculate lock file checksums locally for the following providers:
+│   - yandex-cloud/yandex
+│ 
+│ The current .terraform.lock.hcl file only includes checksums for linux_amd64, so Terraform running on another platform will fail to install these providers.
+│ 
+│ To calculate additional checksums for another platform, run:
+│   terraform providers lock -platform=linux_amd64
+│ (where linux_amd64 is the platform to generate)
+╵
+Terraform has been successfully initialized!
+
+You may now begin working with Terraform. Try running "terraform plan" to see
+any changes that are required for your infrastructure. All Terraform commands
+should now work.
+
+If you ever set or change modules or backend configuration for Terraform,
+rerun this command to reinitialize your working directory. If you forget, other
+commands will detect it and remind you to do so if necessary.
+```
+Создал VPC с подсетями в разных зонах доступности.
+```hcl
+resource "yandex_vpc_network" "develop" {
+  name = var.vpc_name
+}
+resource "yandex_vpc_subnet" "subnet_zones" {
+  count          = 3
+  name           = "subnet-${var.subnet_zone[count.index]}"
+  zone           = "${var.subnet_zone[count.index]}"
+  network_id     = "${yandex_vpc_network.develop.id}"
+  v4_cidr_blocks = [ "${var.cidr[count.index]}" ]
+}
+```
+Результаты применеия конфигурвций:
+![image](https://github.com/user-attachments/assets/0f778ca5-e301-4c29-a4a0-efdf8c022d31)
+![image](https://github.com/user-attachments/assets/10736b75-2c79-4210-ac53-9fe408aab562)
+![image](https://github.com/user-attachments/assets/76b49466-9fe9-408e-a2fd-27a3c03cbf74)
+Убедился , что теперь вы можете выполнить команды `terraform destroy` и `terraform apply` без дополнительных ручных действий.
+```bash
+ser@microk8s:~/devops-diploma-netology/terraform$ terraform destroy
+yandex_vpc_network.develop: Refreshing state... [id=enp4kg7up291o0faqtqv]
+yandex_vpc_subnet.subnet_zones[0]: Refreshing state... [id=e9bkotjbugv66js68u84]
+yandex_vpc_subnet.subnet_zones[1]: Refreshing state... [id=e2l1trvuihvq0uqdldfh]
+yandex_vpc_subnet.subnet_zones[2]: Refreshing state... [id=fl8194jj1vic23i63sjt]
+
+Terraform used the selected providers to generate the following execution plan. Resource actions are indicated with the following symbols:
+  - destroy
+
+Terraform will perform the following actions:
+
+  # yandex_vpc_network.develop will be destroyed
+  - resource "yandex_vpc_network" "develop" {
+      - created_at                = "2025-01-14T01:24:39Z" -> null
+      - default_security_group_id = "enp1bah2876m7cchqjtm" -> null
+      - folder_id                 = "b1gpta86451pk7tseq2b" -> null
+      - id                        = "enp4kg7up291o0faqtqv" -> null
+      - labels                    = {} -> null
+      - name                      = "VPC-k8s" -> null
+      - subnet_ids                = [
+          - "e2l1trvuihvq0uqdldfh",
+          - "e9bkotjbugv66js68u84",
+          - "fl8194jj1vic23i63sjt",
+        ] -> null
+        # (1 unchanged attribute hidden)
+    }
+
+  # yandex_vpc_subnet.subnet_zones[0] will be destroyed
+  - resource "yandex_vpc_subnet" "subnet_zones" {
+      - created_at     = "2025-01-14T01:24:44Z" -> null
+      - folder_id      = "b1gpta86451pk7tseq2b" -> null
+      - id             = "e9bkotjbugv66js68u84" -> null
+      - labels         = {} -> null
+      - name           = "subnet-ru-central1-a" -> null
+      - network_id     = "enp4kg7up291o0faqtqv" -> null
+      - v4_cidr_blocks = [
+          - "10.10.1.0/24",
+        ] -> null
+      - v6_cidr_blocks = [] -> null
+      - zone           = "ru-central1-a" -> null
+        # (2 unchanged attributes hidden)
+    }
+
+  # yandex_vpc_subnet.subnet_zones[1] will be destroyed
+  - resource "yandex_vpc_subnet" "subnet_zones" {
+      - created_at     = "2025-01-14T01:24:45Z" -> null
+      - folder_id      = "b1gpta86451pk7tseq2b" -> null
+      - id             = "e2l1trvuihvq0uqdldfh" -> null
+      - labels         = {} -> null
+      - name           = "subnet-ru-central1-b" -> null
+      - network_id     = "enp4kg7up291o0faqtqv" -> null
+      - v4_cidr_blocks = [
+          - "10.10.2.0/24",
+        ] -> null
+      - v6_cidr_blocks = [] -> null
+      - zone           = "ru-central1-b" -> null
+        # (2 unchanged attributes hidden)
+    }
+
+  # yandex_vpc_subnet.subnet_zones[2] will be destroyed
+  - resource "yandex_vpc_subnet" "subnet_zones" {
+      - created_at     = "2025-01-14T01:24:44Z" -> null
+      - folder_id      = "b1gpta86451pk7tseq2b" -> null
+      - id             = "fl8194jj1vic23i63sjt" -> null
+      - labels         = {} -> null
+      - name           = "subnet-ru-central1-d" -> null
+      - network_id     = "enp4kg7up291o0faqtqv" -> null
+      - v4_cidr_blocks = [
+          - "10.10.3.0/24",
+        ] -> null
+      - v6_cidr_blocks = [] -> null
+      - zone           = "ru-central1-d" -> null
+        # (2 unchanged attributes hidden)
+    }
+
+Plan: 0 to add, 0 to change, 4 to destroy.
+
+Do you really want to destroy all resources?
+  Terraform will destroy all your managed infrastructure, as shown above.
+  There is no undo. Only 'yes' will be accepted to confirm.
+
+  Enter a value: yes
+
+yandex_vpc_subnet.subnet_zones[1]: Destroying... [id=e2l1trvuihvq0uqdldfh]
+yandex_vpc_subnet.subnet_zones[0]: Destroying... [id=e9bkotjbugv66js68u84]
+yandex_vpc_subnet.subnet_zones[2]: Destroying... [id=fl8194jj1vic23i63sjt]
+yandex_vpc_subnet.subnet_zones[2]: Destruction complete after 1s
+yandex_vpc_subnet.subnet_zones[1]: Destruction complete after 1s
+yandex_vpc_subnet.subnet_zones[0]: Destruction complete after 2s
+yandex_vpc_network.develop: Destroying... [id=enp4kg7up291o0faqtqv]
+yandex_vpc_network.develop: Destruction complete after 1s
+
+Destroy complete! Resources: 4 destroyed.
+user@microk8s:~/devops-diploma-netology/terraform$ terraform apply
+
+Terraform used the selected providers to generate the following execution plan. Resource actions are indicated with the following symbols:
+  + create
+
+Terraform will perform the following actions:
+
+  # yandex_vpc_network.develop will be created
+  + resource "yandex_vpc_network" "develop" {
+      + created_at                = (known after apply)
+      + default_security_group_id = (known after apply)
+      + folder_id                 = (known after apply)
+      + id                        = (known after apply)
+      + labels                    = (known after apply)
+      + name                      = "VPC-k8s"
+      + subnet_ids                = (known after apply)
+    }
+
+  # yandex_vpc_subnet.subnet_zones[0] will be created
+  + resource "yandex_vpc_subnet" "subnet_zones" {
+      + created_at     = (known after apply)
+      + folder_id      = (known after apply)
+      + id             = (known after apply)
+      + labels         = (known after apply)
+      + name           = "subnet-ru-central1-a"
+      + network_id     = (known after apply)
+      + v4_cidr_blocks = [
+          + "10.10.1.0/24",
+        ]
+      + v6_cidr_blocks = (known after apply)
+      + zone           = "ru-central1-a"
+    }
+
+  # yandex_vpc_subnet.subnet_zones[1] will be created
+  + resource "yandex_vpc_subnet" "subnet_zones" {
+      + created_at     = (known after apply)
+      + folder_id      = (known after apply)
+      + id             = (known after apply)
+      + labels         = (known after apply)
+      + name           = "subnet-ru-central1-b"
+      + network_id     = (known after apply)
+      + v4_cidr_blocks = [
+          + "10.10.2.0/24",
+        ]
+      + v6_cidr_blocks = (known after apply)
+      + zone           = "ru-central1-b"
+    }
+
+  # yandex_vpc_subnet.subnet_zones[2] will be created
+  + resource "yandex_vpc_subnet" "subnet_zones" {
+      + created_at     = (known after apply)
+      + folder_id      = (known after apply)
+      + id             = (known after apply)
+      + labels         = (known after apply)
+      + name           = "subnet-ru-central1-d"
+      + network_id     = (known after apply)
+      + v4_cidr_blocks = [
+          + "10.10.3.0/24",
+        ]
+      + v6_cidr_blocks = (known after apply)
+      + zone           = "ru-central1-d"
+    }
+
+Plan: 4 to add, 0 to change, 0 to destroy.
+
+Do you want to perform these actions?
+  Terraform will perform the actions described above.
+  Only 'yes' will be accepted to approve.
+
+  Enter a value: yes
+
+yandex_vpc_network.develop: Creating...
+yandex_vpc_network.develop: Creation complete after 2s [id=enp7b4luklr8evdoiala]
+yandex_vpc_subnet.subnet_zones[2]: Creating...
+yandex_vpc_subnet.subnet_zones[0]: Creating...
+yandex_vpc_subnet.subnet_zones[1]: Creating...
+yandex_vpc_subnet.subnet_zones[0]: Creation complete after 1s [id=e9bnd2n77dbe87bck7v6]
+yandex_vpc_subnet.subnet_zones[2]: Creation complete after 2s [id=fl83r4aa2jtl1orm8c60]
+yandex_vpc_subnet.subnet_zones[1]: Creation complete after 2s [id=e2l8t85dhubj8bn6oldf]
+
+Apply complete! Resources: 4 added, 0 changed, 0 destroyed.
+```
+
 
 ---
 ### Создание Kubernetes кластера
