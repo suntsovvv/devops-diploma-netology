@@ -41,7 +41,17 @@ variable "cidr" {
   description = "Список CIDR-ов"
 }
 
-variable "ubuntu-2204-lts" {
+variable "image_id" {
   description = "ID образа ОС"
 }
 
+variable "master" {
+  type = map
+  description = "Описание ресурсов для master нод"
+
+  }
+
+  variable "worker" {
+ type = map
+ description = "Описание ресурсов для worker нод"
+  }
