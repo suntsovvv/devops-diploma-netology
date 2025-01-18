@@ -1,9 +1,10 @@
+
 all:
-    hosts: %{ for idx, master in k8s-masters }
+    hosts: %{ for idx, k8s-master in k8s-masters }
         k8s-master-${idx}:
             ansible_host: ${master.network_interface[0].nat_ip_address}
             ip: ${master.network_interface[0].ip_address}
-            access_ip: ${master.network_interface[0].nat_ip_address}%{ endfor }%{ for idx, worker in k8s-workers }
+            access_ip: ${master.network_interface[0].nat_ip_address}%{ endfor }%{ for idx, worker in workers }
             ansible_user: ubuntu
 
         k8s-worker-${idx}:
@@ -14,14 +15,16 @@ all:
 
 
 kube_control_plane:
-    hosts: %{ for idx, master in k8s-masters } 
+    hosts: %{ for idx, master in masters } 
         ${master.name}:%{ endfor }
 kube_node:
-    hosts: %{ for idx, worker in k8s-workers } 
+    hosts: %{ for idx, worker in workers } 
         ${worker.name}:%{ endfor }
 etcd:
-    hosts: %{ for idx, master in k8s-masters } 
+    hosts: %{ for idx, master in masters } 
         ${master.name} : %{ endfor }
 
 
 
+
+    
