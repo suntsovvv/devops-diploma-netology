@@ -50,15 +50,40 @@
     modprobe overlay
     modprobe br_netfilter
 
-- name: Setup sysctl params
+- name: set net.ipv4.ip_forward
   ansible.posix.sysctl:
-    name: "{{ item }}"
+    name: net.ipv4.ip_forward
     value: '1'
-    sysctl_set: yes
     state: present
     reload: yes
     sysctl_file: /etc/sysctl.d/k8s.conf
-  loop:
-    - net.bridge.bridge-nf-call-iptables
-    - net.ipv4.ip_forward
-    - net.bridge.bridge-nf-call-ip6tables
+
+- name: set net.bridge.bridge-nf-call-iptables
+  ansible.posix.sysctl:
+    name: net.bridge.bridge-nf-call-iptables
+    value: '1'
+    state: present
+    reload: yes
+    sysctl_file: /etc/sysctl.d/k8s.conf
+- name: set net.bridge.bridge-nf-call-ip6tables
+  ansible.posix.sysctl:
+    name: net.bridge.bridge-nf-call-ip6tables
+    value: '1'
+    state: present
+    reload: yes
+    sysctl_file: /etc/sysctl.d/k8s.conf
+
+ 
+
+# - name: Setup sysctl params
+#   ansible.posix.sysctl:
+#     name: "{{ item }}"
+#     value: '1'
+#     sysctl_set: true
+#     state: present
+#     reload: yes
+#     sysctl_file: /etc/sysctl.d/k8s.conf
+#   loop:
+#     - net.bridge.bridge-nf-call-iptables
+#     - net.ipv4.ip_forward
+#     - net.bridge.bridge-nf-call-ip6tables

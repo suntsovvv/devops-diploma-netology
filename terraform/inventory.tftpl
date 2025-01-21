@@ -1,27 +1,33 @@
 all:
-    hosts: %{ for idx, master in k8s-masters }
-        k8s-master-${idx}:
-            ansible_host: ${master.network_interface[0].nat_ip_address}
-            ip: ${master.network_interface[0].ip_address}
-            access_ip: ${master.network_interface[0].nat_ip_address}%{ endfor }%{ for idx, worker in k8s-workers }
+    hosts:
+        k8s-master:
+            ansible_host:
+            ip: ${k8s-master.network_interface[0].ip_address}
             ansible_user: ubuntu
+            ansible_ssh_common_args: -J ubuntu@${bastion-nat.network_interface[0].nat_ip_address}
 
-        k8s-worker-${idx}:
-            ansible_host: ${worker.network_interface[0].nat_ip_address}
-            ip: ${worker.network_interface[0].ip_address}
-            access_ip: ${worker.network_interface[0].nat_ip_address}%{ endfor }
+        k8s-worker-1:
+            ansible_host:
+            ip: ${k8s-worker-1.network_interface[0].ip_address}
             ansible_user: ubuntu
-
-
+            ansible_ssh_common_args: -J ubuntu@${bastion-nat.network_interface[0].nat_ip_address}
+        
+        k8s-worker-2:
+            ansible_host:
+            ip: ${k8s-worker-2.network_interface[0].ip_address}
+            ansible_user: ubuntu
+            ansible_ssh_common_args: -J ubuntu@${bastion-nat.network_interface[0].nat_ip_address}
+         
+        
+        
 kube_control_plane:
-    hosts: %{ for idx, master in k8s-masters } 
-        ${master.name}:%{ endfor }
+    hosts: 
+        k8s-master:
 kube_node:
-    hosts: %{ for idx, worker in k8s-workers } 
-        ${worker.name}:%{ endfor }
+    hosts:
+        k8s-worker-1:
+        k8s-worker-2:
 etcd:
-    hosts: %{ for idx, master in k8s-masters } 
-        ${master.name} : %{ endfor }
-
-
+    hosts: 
+        k8s-master:
 

@@ -51,7 +51,13 @@ variable "master" {
 
   }
 
-  variable "worker" {
+variable "worker" {
  type = map
  description = "Описание ресурсов для worker нод"
+  }
+
+variable "bastion" {
+type = map
+description = "Описание ресурсов для master нод"
+
   }
