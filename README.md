@@ -376,6 +376,39 @@ Apply complete! Resources: 4 added, 0 changed, 0 destroyed.
 
 1. Git репозиторий с тестовым приложением и Dockerfile.
 2. Регистри с собранным docker image. В качестве регистри может быть DockerHub или [Yandex Container Registry](https://cloud.yandex.ru/services/container-registry), созданный также с помощью terraform.
+## Решение:
+Создал дополнительны репозиторий https://github.com/suntsovvv/web-app-diploma.git
+Создал статичную web-страницу :
+```html
+<html>
+ <head>
+    <title>
+        web-app-dipoma
+    </title>
+    <meta name="title" content="web-app-dipoma">
+    <meta name="author" content="Suntsov VV">
+ </head>
+ <body> 
+    <pre>
+  hello this is version 1.0.0
+  --------
+     \   ^__^
+      \  (oo)\_______
+         (__)\       )\/\
+             ||----w |
+             ||     ||
+    </pre>
+
+ </body>
+</html>
+```
+Далее создал Dockerfile:
+```
+FROM nginx:1.27.0
+RUN rm -rf /usr/share/nginx/html/*
+COPY content/ /usr/share/nginx/html/
+EXPOSE 80
+```
 
 ---
 ### Подготовка cистемы мониторинга и деплой приложения
