@@ -376,8 +376,10 @@ Apply complete! Resources: 4 added, 0 changed, 0 destroyed.
 
 1. Git репозиторий с тестовым приложением и Dockerfile.
 2. Регистри с собранным docker image. В качестве регистри может быть DockerHub или [Yandex Container Registry](https://cloud.yandex.ru/services/container-registry), созданный также с помощью terraform.
+
 ## Решение:
-Создал дополнительны репозиторий https://github.com/suntsovvv/web-app-diploma.git
+Создал дополнительный репозиторий https://github.com/suntsovvv/web-app-diploma.git   
+Создал на DockerHub репозторий suntsovvv/web-app-diploma
 Создал статичную web-страницу :
 ```html
 <html>
@@ -406,11 +408,89 @@ Apply complete! Resources: 4 added, 0 changed, 0 destroyed.
 ```
 FROM nginx:1.27.0
 RUN rm -rf /usr/share/nginx/html/*
-COPY content/ /usr/share/nginx/html/
+COPY index.html /usr/share/nginx/html/
 EXPOSE 80
 ```
+Залогинился на DockerHub:
+```bash
+root@astra:/home/user# docker login -u suntsovvv
+Password: 
+root@astra:/home/user# docker login -u suntsovvv@gmail.com
+Password: 
+WARNING! Your password will be stored unencrypted in /root/.docker/config.json.
+Configure a credential helper to remove this warning. See
+https://docs.docker.com/engine/reference/commandline/login/#credentials-store
 
----
+Login Succeeded
+```
+Создал docker образ:
+```bash
+root@astra:/home/user/testdocker# docker build . -t suntsovvv/web-app-diploma:1.0.0
+Sending build context to Docker daemon  3.072kB
+Step 1/4 : FROM nginx:1.27.0
+ ---> 900dca2a61f5
+Step 2/4 : RUN rm -rf /usr/share/nginx/html/*
+ ---> Using cache
+ ---> 4da2d5156a90
+Step 3/4 : COPY /user/home/testdocker/index.html  /usr/share/nginx/
+COPY failed: stat /var/lib/docker/tmp/docker-builder414349919/user/home/testdocker/index.html: no such file or directory
+root@astra:/home/user/testdocker# nano Dockerfile 
+root@astra:/home/user/testdocker# docker build . -t suntsovvv/web-app-diploma:1.0.0
+Sending build context to Docker daemon  3.072kB
+Step 1/4 : FROM nginx:1.27.0
+ ---> 900dca2a61f5
+Step 2/4 : RUN rm -rf /usr/share/nginx/html/*
+ ---> Using cache
+ ---> 4da2d5156a90
+Step 3/4 : COPY index.html  /usr/share/nginx/html/
+ ---> 1fe4fa6d593b
+Step 4/4 : EXPOSE 80
+ ---> Running in 770eab7b8160
+Removing intermediate container 770eab7b8160
+ ---> fd33e0f6f7be
+Successfully built fd33e0f6f7be
+```
+Запушил образ на Hub:
+```
+root@astra:/home/user/testdocker# docker push  suntsovvv/web-app-diploma:1.0.0  
+The push refers to repository [docker.io/suntsovvv/web-app-diploma]
+a42ccfa5d1fb: Pushed 
+ec492b0e5a19: Pushed 
+b90d53c29dae: Mounted from library/nginx 
+79bfdc61ef6f: Mounted from library/nginx 
+0c95345509b7: Mounted from library/nginx 
+14dc34bc60ae: Mounted from library/nginx 
+45878e4d8341: Mounted from library/nginx 
+9aa78b86f4b8: Mounted from library/nginx 
+9853575bc4f9: Mounted from library/nginx 
+1.0.0: digest: sha256:4f57d1ff57dfdb495c459dd6440e5958cdae3005eae554314c9daadfd56d079e size: 2192
+```
+
+
+Запустил контейнер:
+```
+root@astra:/home/user/testdocker# docker run -p 80:80  suntsovvv/web-app-diploma:1.0.0
+/docker-entrypoint.sh: /docker-entrypoint.d/ is not empty, will attempt to perform configuration
+/docker-entrypoint.sh: Looking for shell scripts in /docker-entrypoint.d/
+/docker-entrypoint.sh: Ignoring /docker-entrypoint.d/10-listen-on-ipv6-by-default.sh, not executable
+/docker-entrypoint.sh: Ignoring /docker-entrypoint.d/15-local-resolvers.envsh, not executable
+/docker-entrypoint.sh: Ignoring /docker-entrypoint.d/20-envsubst-on-templates.sh, not executable
+/docker-entrypoint.sh: Ignoring /docker-entrypoint.d/30-tune-worker-processes.sh, not executable
+/docker-entrypoint.sh: Configuration complete; ready for start up
+2025/01/22 04:57:33 [notice] 1#1: using the "epoll" event method
+2025/01/22 04:57:33 [notice] 1#1: nginx/1.27.0
+2025/01/22 04:57:33 [notice] 1#1: built by gcc 12.2.0 (Debian 12.2.0-14) 
+2025/01/22 04:57:33 [notice] 1#1: OS: Linux 5.15.0-70-generic
+2025/01/22 04:57:33 [notice] 1#1: getrlimit(RLIMIT_NOFILE): 1048576:1048576
+2025/01/22 04:57:33 [notice] 1#1: start worker processes
+2025/01/22 04:57:33 [notice] 1#1: start worker process 11
+2025/01/22 04:57:33 [notice] 1#1: start worker process 12
+2025/01/22 04:57:33 [notice] 1#1: start worker process 13
+2025/01/22 04:57:33 [notice] 1#1: start worker process 14
+```
+Проверяю в браузере:   
+![image](https://github.com/user-attachments/assets/46d9e0fd-d4b3-42e1-a634-730a9efd4d76)
+
 ### Подготовка cистемы мониторинга и деплой приложения
 
 Уже должны быть готовы конфигурации для автоматического создания облачной инфраструктуры и поднятия Kubernetes кластера.  
