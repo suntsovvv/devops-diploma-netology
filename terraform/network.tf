@@ -100,6 +100,8 @@ resource "yandex_lb_network_load_balancer" "k8s" {
   listener {
     name = "web-app"
     port = 80
+    target_port = 31080
+
     external_address_spec {
       ip_version = "ipv4"
     }
@@ -107,25 +109,21 @@ resource "yandex_lb_network_load_balancer" "k8s" {
 
   listener {
     name = "grafana"
-    port = 30928
+    port = 3000
+    target_port = 30001
+
     external_address_spec {
       ip_version = "ipv4"
     }
   }
 
-  # listener {
-  #   name = "kubectl"
-  #   port = 6443
-  #   external_address_spec {
-  #     ip_version = "ipv4"
-  #   }
-  # }
+
   attached_target_group {
     target_group_id = yandex_lb_target_group.k8s-cluster.id
     healthcheck {
       name = "tcp"
       tcp_options {
-        port = 22
+        port = 30080
 
       }
     }
@@ -135,7 +133,7 @@ resource "yandex_lb_network_load_balancer" "k8s" {
     healthcheck {
       name = "tcp"
       tcp_options {
-        port = 30928
+        port = 30001
 
       }
     }
