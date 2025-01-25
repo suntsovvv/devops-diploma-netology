@@ -61,7 +61,7 @@ resource "yandex_vpc_security_group" "nat-instance-sg" {
     description    = "any"
     v4_cidr_blocks = ["0.0.0.0/0"]
   }
-
+  
   ingress {
     protocol       = "ANY"
     description    = "any"
@@ -69,13 +69,9 @@ resource "yandex_vpc_security_group" "nat-instance-sg" {
   }
 }
 
-# Создание группы целей для балансировщика нагрузки
+# Создание групп целей для балансировщика нагрузки
 resource "yandex_lb_target_group" "k8s-cluster" {
   name = "k8s-cluster"
-  # target {
-  #   subnet_id = yandex_vpc_subnet.ru-central1-a.id
-  #   address   = yandex_compute_instance.master.network_interface[0].ip_address
-  # }
   target {
     subnet_id = yandex_vpc_subnet.ru-central1-a.id
     address   = yandex_compute_instance.worker-1.network_interface[0].ip_address
@@ -86,25 +82,60 @@ resource "yandex_lb_target_group" "k8s-cluster" {
   }
  
 }
+resource "yandex_lb_target_group" "kubectl" {
+  name = "kubectl"
+  target {
+    subnet_id = yandex_vpc_subnet.ru-central1-a.id
+    address   = yandex_compute_instance.master.network_interface[0].ip_address
+  }
+
+}
+
 
 #Создание сетевого балансировщика
+
 resource "yandex_lb_network_load_balancer" "k8s" {
   name = "k8s-balancer"
 
   listener {
-    name = "my-listener"
-    port = 30051
+    name = "web-app"
+    port = 80
     external_address_spec {
       ip_version = "ipv4"
     }
   }
 
+  listener {
+    name = "grafana"
+    port = 30928
+    external_address_spec {
+      ip_version = "ipv4"
+    }
+  }
+
+  # listener {
+  #   name = "kubectl"
+  #   port = 6443
+  #   external_address_spec {
+  #     ip_version = "ipv4"
+  #   }
+  # }
   attached_target_group {
     target_group_id = yandex_lb_target_group.k8s-cluster.id
     healthcheck {
       name = "tcp"
       tcp_options {
         port = 22
+
+      }
+    }
+  }
+  attached_target_group {
+    target_group_id = yandex_lb_target_group.kubectl.id
+    healthcheck {
+      name = "tcp"
+      tcp_options {
+        port = 30928
 
       }
     }
@@ -124,26 +155,3 @@ resource "yandex_lb_network_load_balancer" "k8s" {
 
 
 
-
-
-
-# # ##
-# # # resource "yandex_lb_target_group" "ssh_target_group" {
-# # #   name      = "ssh-target-group"
-# # #   region_id = "ru-central1"
-
-# # #   target {
-# # #     subnet_id = yandex_vpc_subnet.subnet-a.id
-# # #     address   = "10.5.0.11"
-# # #   }
-
-# # #   target {
-# # #     subnet_id = yandex_vpc_subnet.subnet-b.id
-# # #     address   = "10.6.0.11"
-# # #   }
-
-# # #   target {
-# # #     subnet_id = yandex_vpc_subnet.subnet-d.id
-# # #     address   = "10.7.0.11"
-# # #   }
-# # # }
