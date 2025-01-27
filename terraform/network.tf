@@ -1,14 +1,7 @@
 resource "yandex_vpc_network" "k8s" {
   name = var.vpc_name
 }
-# resource "yandex_vpc_subnet" "subnet_zones" {
-#   count          = 3
-#   name           = "subnet-${var.subnet_zone[count.index]}"
-#   zone           = "${var.subnet_zone[count.index]}"
-#   network_id     = "${yandex_vpc_network.k8s.id}"
-#   route_table_id = yandex_vpc_route_table.nat-instance-route.id
-#   v4_cidr_blocks = [ "${var.cidr[count.index]}" ]
-# }
+
 # Создание подсетей
 resource "yandex_vpc_subnet" "ru-central1-a" {
   zone           = var.subnet_zone[0]

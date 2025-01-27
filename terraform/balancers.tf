@@ -11,14 +11,6 @@ resource "yandex_lb_target_group" "k8s-cluster" {
   }
  
 }
-# resource "yandex_lb_target_group" "kubectl" {
-#   name = "kubectl"
-#   target {
-#     subnet_id = yandex_vpc_subnet.ru-central1-a.id
-#     address   = yandex_compute_instance.master.network_interface[0].ip_address
-#   }
-
-# }
 
 #Создание сетевого балансировщика
 
