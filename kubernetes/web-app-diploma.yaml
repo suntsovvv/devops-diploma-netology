@@ -2,6 +2,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: web-app-diploma
+  namespace: web-app-diploma
   labels:
     app: web-app-diploma
 spec:
@@ -25,6 +26,7 @@ apiVersion: v1
 kind: Service
 metadata:
   name: web-app-diploma
+  namespace: web-app-diploma
 spec:
   type: NodePort
   selector:
@@ -39,6 +41,7 @@ kind: NetworkPolicy
 apiVersion: networking.k8s.io/v1
 metadata:
   name: web-app-diploma
+  namespace: web-app-diploma
 spec:
   podSelector:
     matchLabels:
