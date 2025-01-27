@@ -144,15 +144,41 @@ commands will detect it and remind you to do so if necessary.
 ```
 Создал VPC с подсетями в разных зонах доступности.
 ```hcl
-resource "yandex_vpc_network" "develop" {
+resource "yandex_vpc_network" "k8s" {
   name = var.vpc_name
 }
-resource "yandex_vpc_subnet" "subnet_zones" {
-  count          = 3
-  name           = "subnet-${var.subnet_zone[count.index]}"
-  zone           = "${var.subnet_zone[count.index]}"
-  network_id     = "${yandex_vpc_network.develop.id}"
-  v4_cidr_blocks = [ "${var.cidr[count.index]}" ]
+
+# Создание подсетей
+resource "yandex_vpc_subnet" "ru-central1-a" {
+  zone           = var.subnet_zone[0]
+  name = "ru-central1-a"
+  network_id     = "${yandex_vpc_network.k8s.id}"
+  v4_cidr_blocks = ["${var.cidr[0]}"]
+  route_table_id = yandex_vpc_route_table.nat-instance-route.id
+
+}
+resource "yandex_vpc_subnet" "ru-central1-b" {
+  zone           = var.subnet_zone[1]
+  name = "ru-central1-b"
+  network_id     = "${yandex_vpc_network.k8s.id}"
+  v4_cidr_blocks = ["${var.cidr[1]}"]
+  route_table_id = yandex_vpc_route_table.nat-instance-route.id
+
+}
+
+resource "yandex_vpc_subnet" "ru-central1-d" {
+  zone           = var.subnet_zone[2]
+  name = "ru-central1-d"
+  network_id     = "${yandex_vpc_network.k8s.id}"
+  v4_cidr_blocks = ["${var.cidr[2]}"]
+  route_table_id = yandex_vpc_route_table.nat-instance-route.id
+}
+resource "yandex_vpc_subnet" "bastion-nat" {
+  zone           = var.subnet_zone[0]
+  name = "k8s-out"
+  network_id     = "${yandex_vpc_network.k8s.id}"
+  v4_cidr_blocks = ["${var.cidr[3]}"]
+
 }
 ```
 Результаты применеия конфигурвций:
@@ -358,7 +384,283 @@ Apply complete! Resources: 4 added, 0 changed, 0 destroyed.
 1. Работоспособный Kubernetes кластер.
 2. В файле `~/.kube/config` находятся данные для доступа к кластеру.
 3. Команда `kubectl get pods --all-namespaces` отрабатывает без ошибок.
+## Решение:
+Для развертывания кластера используются версии ПО:   
+Terraform v1.10.5-dev   
+ansible [core 2.16.3]   
+Ubuntu 22.04.5 LTS   
+Подготовил конфигурацию для создания одной master-ноды и нескольких worker-нод [terraform](https://github.com/suntsovvv/devops-diploma-netology/tree/main/terraform)   
+Также дополнительно добавил бастион хост, для того чтобы кластер не светил в Интернет белыми ip нод и иметь к доступ к его конфигурации, доступ к приложению и web-интерфейсу мониторинга в дальнейшем будет обеспесен при помощи балантера.   
+Занчения для переменных неодходимо указывать в файле personal.auto.tfvars который имеет структуру:
+```yaml
+cloud_id = " "
+folder_id = " "
+zone = "ru-central1-a"
+token = " "
+vpc_name = "VPC-k8s"
+subnet_zone = ["ru-central1-a","ru-central1-b","ru-central1-d"]
+cidr = ["10.10.1.0/24","10.10.2.0/24","10.10.3.0/24","10.0.0.0/24"]
 
+master = {
+    cores = 4, 
+    memory = 4, 
+    core_fraction = 20,  
+    platform_id = "standard-v3", 
+    count = 1,image_id = "fd8slhpjt2754igimqu8", 
+    disk_sze = 40,
+    scheduling_policy = "true"
+    }
+
+worker = {
+    cores = 4, 
+    memory = 4, 
+    core_fraction = 20,  
+    platform_id = "standard-v3", 
+    count = 2,image_id = "fd8slhpjt2754igimqu8", 
+    disk_sze = 40,
+    scheduling_policy = "true"
+    } 
+
+bastion = {
+    cores = 2, 
+    memory = 2, 
+    core_fraction = 20, 
+    image_id = "fd8m30o437b5c6b9en6r", 
+    disk_sze = 20,
+    scheduling_policy = "true"
+    }
+
+```
+В результате применения конфигурации,  так же создается файл с инвентарем для ansible hosts.yaml:   
+```yaml 
+all:
+    hosts:
+        k8s-master:
+            ansible_host:
+            ip: 10.10.1.6
+            ansible_user: ubuntu
+            ansible_ssh_common_args: -J ubuntu@89.169.129.228
+
+        k8s-worker-1:
+            ansible_host:
+            ip: 10.10.1.7
+            ansible_user: ubuntu
+            ansible_ssh_common_args: -J ubuntu@89.169.129.228
+        
+        k8s-worker-2:
+            ansible_host:
+            ip: 10.10.2.22
+            ansible_user: ubuntu
+            ansible_ssh_common_args: -J ubuntu@89.169.129.228
+         
+        
+        
+kube_control_plane:
+    hosts: 
+        k8s-master:
+kube_node:
+    hosts:
+        k8s-worker-1:
+        k8s-worker-2:
+etcd:
+    hosts: 
+        k8s-master:
+```
+ на основе шаблона inventory.tftpl:
+```
+all:
+    hosts:
+        k8s-master:
+            ansible_host:
+            ip: ${k8s-master.network_interface[0].ip_address}
+            ansible_user: ubuntu
+            ansible_ssh_common_args: -J ubuntu@${bastion-nat.network_interface[0].nat_ip_address}
+
+        k8s-worker-1:
+            ansible_host:
+            ip: ${k8s-worker-1.network_interface[0].ip_address}
+            ansible_user: ubuntu
+            ansible_ssh_common_args: -J ubuntu@${bastion-nat.network_interface[0].nat_ip_address}
+        
+        k8s-worker-2:
+            ansible_host:
+            ip: ${k8s-worker-2.network_interface[0].ip_address}
+            ansible_user: ubuntu
+            ansible_ssh_common_args: -J ubuntu@${bastion-nat.network_interface[0].nat_ip_address}
+         
+        
+        
+kube_control_plane:
+    hosts: 
+        k8s-master:
+kube_node:
+    hosts:
+        k8s-worker-1:
+        k8s-worker-2:
+etcd:
+    hosts: 
+        k8s-master:
+
+```
+Для удобства добавил output c выводом белого ip бастион хоста и внутренним ip master-ноды.   
+Результат применения:
+```bash
+user@microk8s:~/devops-diploma-netology/terraform$ terraform apply
+
+Terraform used the selected providers to generate the following execution plan. Resource actions are indicated with the following symbols:
+...................................................................
+ 
+
+Apply complete! Resources: 14 added, 0 changed, 0 destroyed.
+
+Outputs:
+
+all_vms = {
+  "bastion-nat" = [
+    {
+      "name" = "bastion-nat"
+      "nat_ip_address" = "89.169.129.228"
+    },
+  ]
+  "master" = [
+    {
+      "ip_address" = "10.10.1.6"
+      "name" = "k8s-master"
+    },
+  ]
+}
+```
+![image](https://github.com/user-attachments/assets/d14957e6-fb8e-49d3-8a29-7b4e1a3d4a12)
+
+Проверяю доступ в к кластеру через бастион хост:
+```bash
+ssh ubuntu@10.10.1.6 -J ubuntu@89.169.129.228 
+The authenticity of host '89.169.129.228 (89.169.129.228)' can't be established.
+ED25519 key fingerprint is SHA256:jhXvcablVsCW7dapkwiWC0r7Ax/ZkRZEh9JqzOui1/g.
+This key is not known by any other names.
+Are you sure you want to continue connecting (yes/no/[fingerprint])? yes
+Warning: Permanently added '89.169.129.228' (ED25519) to the list of known hosts.
+The authenticity of host '10.10.1.6 (<no hostip for proxy command>)' can't be established.
+ED25519 key fingerprint is SHA256:c8XLKNGX0omvR5LBxAfa+AkZkClCPKWjqKSnJknR9FM.
+This key is not known by any other names.
+Are you sure you want to continue connecting (yes/no/[fingerprint])? yes
+Warning: Permanently added '10.10.1.6' (ED25519) to the list of known hosts.
+Welcome to Ubuntu 22.04.5 LTS (GNU/Linux 5.15.0-130-generic x86_64)
+
+ * Documentation:  https://help.ubuntu.com
+ * Management:     https://landscape.canonical.com
+ * Support:        https://ubuntu.com/pro
+
+ System information as of Mon Jan 27 10:39:40 AM UTC 2025
+
+  System load:  0.0                Processes:             146
+  Usage of /:   10.4% of 39.28GB   Users logged in:       0
+  Memory usage: 6%                 IPv4 address for eth0: 10.10.1.6
+  Swap usage:   0%
+
+ * Strictly confined Kubernetes makes edge and IoT secure. Learn how MicroK8s
+   just raised the bar for easy, resilient and secure K8s cluster deployment.
+
+   https://ubuntu.com/engage/secure-kubernetes-at-the-edge
+
+Expanded Security Maintenance for Applications is not enabled.
+
+0 updates can be applied immediately.
+
+Enable ESM Apps to receive additional future security updates.
+See https://ubuntu.com/esm or run: sudo pro status
+
+
+The list of available updates is more than a week old.
+To check for new updates run: sudo apt update
+
+
+The programs included with the Ubuntu system are free software;
+the exact distribution terms for each program are described in the
+individual files in /usr/share/doc/*/copyright.
+
+Ubuntu comes with ABSOLUTELY NO WARRANTY, to the extent permitted by
+applicable law.
+
+To run a command as administrator (user "root"), use "sudo <command>".
+See "man sudo_root" for details.
+
+ubuntu@k8s-master:~$ 
+```
+Далее был подготовлен набор ansible-ролей  [k8s](https://github.com/suntsovvv/devops-diploma-netology/tree/main/ansible/k8s)
+В результате применения плейбука:   
+```yaml
+- name: install docker and kubectl
+  hosts: all
+  become: yes
+  remote_user: ubuntu
+  roles:
+    - docker_install
+    - k8s_install
+
+- name: create cluster
+  hosts: kube_control_plane
+  become: yes
+  remote_user: ubuntu
+  roles:
+    - k8s_create_cluster
+
+- name: node invite
+  hosts: kube_node
+  become: yes
+  remote_user: ubuntu
+  roles:
+    - node_invite
+```
+на инвентарь, полученный на предыдущем шаге, выполняется установка необходимого ПО, инициализация кластера, подключение worker-нод к кластеру и настройка kubectl.   
+Применять необходимо командой *ANSIBLE_HOST_KEY_CHECKING=False ansible-playbook -i ../hosts.yaml playbook.yml -K*   
+Ключ ANSIBLE_HOST_KEY_CHECKING=False, нужен для того чтобы не мешали запросы fingerprint, *-K* для того чтобы можно было задать пароль пользователя локальной машины, так как в результате выполнения роли k8s_create_cluster , будет создаваться файл на локальной машине для дальнейшего использования ролью node_invite.   
+Применяю:
+```bash
+user@microk8s:~/devops-diploma-netology/ansible/k8s$ ANSIBLE_HOST_KEY_CHECKING=False ansible-playbook -i ../hosts.yaml playbook.yml -K
+BECOME password:
+................................................
+ ____________
+< PLAY RECAP >
+ ------------
+        \   ^__^
+         \  (oo)\_______
+            (__)\       )\/\
+                ||----w |
+                ||     ||
+
+k8s-master                 : ok=29   changed=24   unreachable=0    failed=0    skipped=0    rescued=0    ignored=0   
+k8s-worker-1               : ok=26   changed=21   unreachable=0    failed=0    skipped=0    rescued=0    ignored=0   
+k8s-worker-2               : ok=26   changed=21   unreachable=0    failed=0    skipped=0    rescued=0    ignored=0   
+```
+Проверяю:
+```bash
+ubuntu@k8s-master:~$ kubectl cluster-info
+Kubernetes control plane is running at https://10.10.1.6:6443
+CoreDNS is running at https://10.10.1.6:6443/api/v1/namespaces/kube-system/services/kube-dns:dns/proxy
+
+To further debug and diagnose cluster problems, use 'kubectl cluster-info dump'.
+ubuntu@k8s-master:~$ kubectl get nodes 
+NAME           STATUS   ROLES           AGE   VERSION
+k8s-master     Ready    control-plane   17m   v1.30.9
+k8s-worker-1   Ready    <none>          16m   v1.30.9
+k8s-worker-2   Ready    <none>          16m   v1.30.9
+ubuntu@k8s-master:~$ kubectl get pods --all-namespaces
+NAMESPACE     NAME                                       READY   STATUS    RESTARTS   AGE
+kube-system   calico-kube-controllers-7dc5458bc6-27wj6   1/1     Running   0          16m
+kube-system   calico-node-dl6xr                          1/1     Running   0          16m
+kube-system   calico-node-kg76m                          1/1     Running   0          16m
+kube-system   calico-node-ml78d                          1/1     Running   0          16m
+kube-system   coredns-55cb58b774-mjdqn                   1/1     Running   0          16m
+kube-system   coredns-55cb58b774-zzr4k                   1/1     Running   0          16m
+kube-system   etcd-k8s-master                            1/1     Running   0          17m
+kube-system   kube-apiserver-k8s-master                  1/1     Running   0          17m
+kube-system   kube-controller-manager-k8s-master         1/1     Running   0          17m
+kube-system   kube-proxy-4v2fp                           1/1     Running   0          16m
+kube-system   kube-proxy-cpvc6                           1/1     Running   0          16m
+kube-system   kube-proxy-qkcpg                           1/1     Running   0          16m
+kube-system   kube-scheduler-k8s-master                  1/1     Running   0          17m
+```
 ---
 ### Создание тестового приложения
 
