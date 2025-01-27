@@ -41,9 +41,6 @@ variable "cidr" {
   description = "Список CIDR-ов"
 }
 
-variable "image_id" {
-  description = "ID образа ОС"
-}
 
 variable "master" {
   type = map
@@ -57,7 +54,19 @@ variable "worker" {
   }
 
 variable "bastion" {
-type = map
-description = "Описание ресурсов для master нод"
+  type = map
+  description = "Описание ресурсов для master нод"
 
   }
+
+variable "listener_grafana" {
+ type = map
+ description = "Описание параметров listener для grafana"
+  }
+variable "listener_web_app" {
+ type = map
+ description = "Описание параметров listener для web-приложения"
+  }
+
+
+

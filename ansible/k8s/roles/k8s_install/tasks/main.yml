@@ -56,7 +56,7 @@
     path: /etc/containerd/config.toml
     regexp: 'SystemdCgroup = false'
     line: SystemdCgroup = true
-    # state: present
+    state: present #
 
 - name: restart containedr # презапускаем containedr
   ansible.builtin.service:

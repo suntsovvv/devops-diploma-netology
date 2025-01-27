@@ -20,14 +20,14 @@ resource "yandex_compute_instance" "master" {
 
   boot_disk {
     initialize_params {
-      image_id = var.image_id
-      size     = 40
+      image_id = var.master.image_id
+      size     = var.master.disk_sze
     }
   }
 
-## Прерываемая
+
   scheduling_policy {
-    preemptible = true
+    preemptible = var.master.scheduling_policy
   }
 
 
@@ -60,13 +60,13 @@ resource "yandex_compute_instance" "master" {
 
   boot_disk {
     initialize_params {
-      image_id = var.image_id
-      size     = 40
+      image_id = var.worker.image_id
+      size     = var.worker.disk_sze
     }
   }
 ## Прерываемая
   scheduling_policy {
-    preemptible = true
+    preemptible = var.worker.scheduling_policy
   }
   network_interface {
     subnet_id = yandex_vpc_subnet.ru-central1-a.id
@@ -99,13 +99,13 @@ resource "yandex_compute_instance" "master" {
 
   boot_disk {
     initialize_params {
-      image_id = var.image_id
-      size     = 40
+      image_id = var.worker.image_id
+      size     = var.worker.disk_sze
     }
   }
 ## Прерываемая
   scheduling_policy {
-    preemptible = true
+    preemptible = var.bastion.scheduling_policy
   }
   network_interface {
     subnet_id = yandex_vpc_subnet.ru-central1-b.id
@@ -132,14 +132,14 @@ resource "yandex_compute_instance" "master" {
     
     }
     scheduling_policy {
-    preemptible = true
+    preemptible = var.bastion.scheduling_policy
     
     }
     boot_disk {
 
     initialize_params {
-      image_id = "fd8m30o437b5c6b9en6r"
-      size = 20
+      image_id = var.bastion.image_id
+      size = var.bastion.disk_sze
     }
     
     }
