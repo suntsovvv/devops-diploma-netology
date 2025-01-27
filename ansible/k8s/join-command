@@ -1,1 +1,0 @@
-kubeadm join 10.10.1.14:6443 --token iu7emt.dy4egk7utfzpp3ip --discovery-token-ca-cert-hash sha256:9f1f36020be2af745f8d8b8f0ec2d77c6ef735684c1ca063d93ccbba4f5e9693 
