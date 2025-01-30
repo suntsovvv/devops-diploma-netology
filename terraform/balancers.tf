@@ -43,19 +43,9 @@ resource "yandex_lb_network_load_balancer" "k8s" {
     healthcheck {
       name = "tcp"
       tcp_options {
-        port = var.listener_web_app.target_port
+        port = 22
 
       }
     }
   }
-#   attached_target_group {
-#     target_group_id = yandex_lb_target_group.kubectl.id
-#     healthcheck {
-#       name = "tcp"
-#       tcp_options {
-#         port = 30001
-
-#       }
-#     }
-#   }
 }
