@@ -791,7 +791,8 @@ root@astra:/home/user/testdocker# docker run -p 80:80  suntsovvv/web-app-diploma
 2025/01/22 04:57:33 [notice] 1#1: start worker process 14
 ```
 Проверяю в браузере:   
-![image](https://github.com/user-attachments/assets/46d9e0fd-d4b3-42e1-a634-730a9efd4d76)
+![image](https://github.com/user-attachments/assets/17d2aa20-6eda-4eec-862e-3af00c502084)
+
 
 ### Подготовка cистемы мониторинга и деплой приложения
 
