@@ -1109,8 +1109,12 @@ spec:
 ```
 Применяю и проверяю через web, для проверки добавил в запись в hosts файл машины ( <ip балансирщка>  suntsovvv.ru)   
 Web-интерфейс Grafana доступен на 80-м порту по адресу http://suntsovvv.ru/grafana/
+ 
 
-![image](https://github.com/user-attachments/assets/7fe5037b-1c18-40d5-a712-1011fdc6e46f)   
+![image](https://github.com/user-attachments/assets/6c956215-24f5-4168-95bf-2c53129fea28)
+
+![image](https://github.com/user-attachments/assets/cc769552-d40f-4900-b483-9f36482d7d05)
+
 Теперь выполню деплой моего тестового приложения, для жтого создыб манифест:
 ```yaml
 apiVersion: apps/v1
@@ -1218,123 +1222,7 @@ ingress.networking.k8s.io/web-ingress created
 Тестовое приложение доступено на 80-м порту по адресу http://suntsovvv.ru/web
 ![image](https://github.com/user-attachments/assets/22bd21b0-a1d5-4901-80a1-02111e027c33)
 
-
-Проверяю сервисы которые поднялись и смотрю поты:
-```bash
-ubuntu@k8s-master:~/kube-prometheus$ kubectl -n monitoring get svc
-NAME                    TYPE        CLUSTER-IP       EXTERNAL-IP   PORT(S)                      AGE
-alertmanager-main       ClusterIP   10.100.109.197   <none>        9093/TCP,8080/TCP            5m56s
-alertmanager-operated   ClusterIP   None             <none>        9093/TCP,9094/TCP,9094/UDP   5m16s
-blackbox-exporter       ClusterIP   10.102.49.27     <none>        9115/TCP,19115/TCP           5m56s
-grafana                 ClusterIP   10.111.113.146   <none>        3000/TCP                     5m55s
-kube-state-metrics      ClusterIP   None             <none>        8443/TCP,9443/TCP            5m55s
-node-exporter           ClusterIP   None             <none>        9100/TCP                     5m55s
-prometheus-adapter      ClusterIP   10.105.103.52    <none>        443/TCP                      5m54s
-prometheus-k8s          ClusterIP   10.106.14.3      <none>        9090/TCP,8080/TCP            5m55s
-prometheus-operated     ClusterIP   None             <none>        9090/TCP                     5m15s
-prometheus-operator     ClusterIP   None             <none>        8443/TCP                     5m54s
-```
-Для  чтобы был доступ к web-интерфейсу grafana, меняю тип сервиса на nodePort создаю политику:
-```yaml
-apiVersion: v1
-kind: Service
-metadata:
-  labels:
-    app.kubernetes.io/name: grafana-service
-  name: grafana
-  namespace: monitoring
-spec:
-  type: NodePort
-  ports:
-  - name: grafana-port
-    port: 3000
-    targetPort: 3000
-    nodePort: 31300
-  selector:
-    app.kubernetes.io/component: grafana
-    app.kubernetes.io/name: grafana
-    app.kubernetes.io/part-of: kube-prometheus
-
----
-kind: NetworkPolicy
-apiVersion: networking.k8s.io/v1
-metadata:
-  name: grafana
-spec:
-  podSelector:
-    matchLabels:
-      app: grafana
-  ingress:
-  - {}
-
-```
-Применяю и проверяю сервисы:
-```bash
-ubuntu@k8s-master:~$ kubectl apply -f grafana.yaml 
-service/grafana configured
-networkpolicy.networking.k8s.io/grafana configured
-ubuntu@k8s-master:~$ kubectl -n monitoring get svc
-NAME                    TYPE        CLUSTER-IP       EXTERNAL-IP   PORT(S)                      AGE
-alertmanager-main       ClusterIP   10.100.109.197   <none>        9093/TCP,8080/TCP            28m
-alertmanager-operated   ClusterIP   None             <none>        9093/TCP,9094/TCP,9094/UDP   28m
-blackbox-exporter       ClusterIP   10.102.49.27     <none>        9115/TCP,19115/TCP           28m
-grafana                 NodePort    10.111.113.146   <none>        3000:31300/TCP               28m
-kube-state-metrics      ClusterIP   None             <none>        8443/TCP,9443/TCP            28m
-node-exporter           ClusterIP   None             <none>        9100/TCP                     28m
-prometheus-adapter      ClusterIP   10.105.103.52    <none>        443/TCP                      28m
-prometheus-k8s          ClusterIP   10.106.14.3      <none>        9090/TCP,8080/TCP            28m
-prometheus-operated     ClusterIP   None             <none>        9090/TCP                     28m
-prometheus-operator     ClusterIP   None             <none>        8443/TCP                     28m
-```
-Cоздаю балансировщик и листенер:
-```yaml
-# Создание групп целей для балансировщика нагрузки
-resource "yandex_lb_target_group" "k8s-cluster" {
-  name = "k8s-cluster"
-  target {
-    subnet_id = yandex_vpc_subnet.ru-central1-a.id
-    address   = yandex_compute_instance.worker-1.network_interface[0].ip_address
-  }
-  target {
-    subnet_id = yandex_vpc_subnet.ru-central1-b.id
-    address   = yandex_compute_instance.worker-2.network_interface[0].ip_address
-  }
- 
-}
-
-#Создание сетевого балансировщика
-
-resource "yandex_lb_network_load_balancer" "k8s" {
-  name = "k8s-balancer"
-
-  listener {
-    name = "${ var.listener_grafana.name }"
-    port = var.listener_grafana.port
-    target_port = var.listener_grafana.target_port
-
-    external_address_spec {
-      ip_version = "ipv4"
-    }
-  }
-
-
-  attached_target_group {
-    target_group_id = yandex_lb_target_group.k8s-cluster.id
-    healthcheck {
-      name = "tcp"
-      tcp_options {
-        port = var.listener_grafana.target_port
-
-      }
-    }
-  }
-}
-
-```
-Применяю и проверяю доступ через web:
-![image](https://github.com/user-attachments/assets/59705e9f-e197-407a-a8e0-6fdea3eccbd4)   
-![image](https://github.com/user-attachments/assets/b784062f-887c-4388-9eb5-184727eca030)
-Теперь можно
+![image](https://github.com/user-attachments/assets/ede14832-03c9-44ac-940b-0ec2275a17ea)
 
 
 
