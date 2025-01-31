@@ -1110,7 +1110,114 @@ spec:
 Применяю и проверяю через web, для проверки добавил в запись в hosts файл машины ( <ip балансирщка>  suntsovvv.ru)   
 Web-интерфейс Grafana доступен на 80-м порту по адресу http://suntsovvv.ru/grafana/
 
-![image](https://github.com/user-attachments/assets/7fe5037b-1c18-40d5-a712-1011fdc6e46f)
+![image](https://github.com/user-attachments/assets/7fe5037b-1c18-40d5-a712-1011fdc6e46f)   
+Теперь выполню деплой моего тестового приложения, для жтого создыб манифест:
+```yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: web-app-diploma
+  namespace: web-app-diploma
+  labels:
+    app: web-app-diploma
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: web-app-diploma
+  template:
+    metadata:
+      labels:
+        app: web-app-diploma
+    spec:
+      containers:
+      - name: web-app-diploma
+        image: suntsovvv/web-app-diploma:1.0.0
+        ports:
+        - containerPort: 80
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: web-app-diploma
+  namespace: web-app-diploma
+spec:
+  type: NodePort
+  selector:
+    app: web-app-diploma
+  ports:
+    - protocol: TCP
+      name: web-app-diploma
+      port: 80
+      nodePort: 31080
+---
+kind: NetworkPolicy
+apiVersion: networking.k8s.io/v1
+metadata:
+  name: web-app-diploma
+  namespace: web-app-diploma
+spec:
+  podSelector:
+    matchLabels:
+      app: web-app-diploma
+  ingress:
+  - {}
+```
+Создаю namespace и применяю:   
+```bash
+ubuntu@k8s-master:~$ kubectl create namespace web-app-diploma
+namespace/web-app-diploma created
+ubuntu@k8s-master:~$ kubectl apply -f web-app-diploma.yaml 
+deployment.apps/web-app-diploma created
+service/web-app-diploma created
+networkpolicy.networking.k8s.io/web-app-diploma created
+ubuntu@k8s-master:~$ kubectl -n web-app-diploma get all
+NAME                                   READY   STATUS    RESTARTS   AGE
+pod/web-app-diploma-55fd8c8b5d-2ccp6   1/1     Running   0          34s
+pod/web-app-diploma-55fd8c8b5d-6nfnz   1/1     Running   0          34s
+pod/web-app-diploma-55fd8c8b5d-lvrvf   1/1     Running   0          34s
+
+NAME                      TYPE       CLUSTER-IP      EXTERNAL-IP   PORT(S)        AGE
+service/web-app-diploma   NodePort   10.103.51.135   <none>        80:31080/TCP   34s
+
+NAME                              READY   UP-TO-DATE   AVAILABLE   AGE
+deployment.apps/web-app-diploma   3/3     3            3           34s
+
+NAME                                         DESIRED   CURRENT   READY   AGE
+replicaset.apps/web-app-diploma-55fd8c8b5d   3         3         3       34s
+```
+Осталось написать ingress для web-приложения:
+```yaml
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: web-ingress
+  namespace: web-app-diploma
+  annotations:
+    nginx.ingress.kubernetes.io/rewrite-target: /
+spec:
+  ingressClassName: nginx
+  rules:
+  - host: suntsovvv.ru
+    http:
+      paths:
+      - path: /web
+        pathType: Prefix
+        backend:
+          service:
+            name: web-app-diploma
+            port:
+              number: 80
+```
+Применяю и проверяю:
+```bash
+ubuntu@k8s-master:~$ kubectl apply -f web-ingress.yaml 
+ingress.networking.k8s.io/web-ingress created
+```
+Тестовое приложение доступено на 80-м порту по адресу http://suntsovvv.ru/web
+![image](https://github.com/user-attachments/assets/22bd21b0-a1d5-4901-80a1-02111e027c33)
+
 
 Проверяю сервисы которые поднялись и смотрю поты:
 ```bash
