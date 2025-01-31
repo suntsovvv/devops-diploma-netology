@@ -390,7 +390,7 @@ Terraform v1.10.5-dev
 ansible [core 2.16.3]   
 Ubuntu 22.04.5 LTS   
 Подготовил конфигурацию для создания одной master-ноды и нескольких worker-нод [terraform](https://github.com/suntsovvv/devops-diploma-netology/tree/main/terraform)   
-Также дополнительно добавил бастион хост, для того чтобы кластер не светил в Интернет белыми ip нод и иметь к доступ к его конфигурации, доступ к приложению и web-интерфейсу мониторинга в дальнейшем будет обеспесен при помощи балантера.   
+Также дополнительно добавил бастион хост, для того чтобы кластер не светил в Интернет белыми ip нод и иметь к доступ к его конфигурации, доступ к приложению и web-интерфейсу мониторинга в дальнейшем будет обеспечен при помощи балансировщика.   
 Занчения для переменных неодходимо указывать в файле personal.auto.tfvars который имеет структуру:
 ```yaml
 cloud_id = " "
@@ -431,7 +431,7 @@ bastion = {
     }
 
 ```
-В результате применения конфигурации,  так же создается файл с инвентарем для ansible hosts.yaml:   
+В результате применения конфигурации,  так же атоматически создается файл с инвентарем для ansible hosts.yaml следующего вида:   
 ```yaml 
 all:
     hosts:
@@ -612,9 +612,10 @@ ubuntu@k8s-master:~$
   roles:
     - node_invite
 ```
-на инвентарь, полученный на предыдущем шаге, выполняется установка необходимого ПО, инициализация кластера, подключение worker-нод к кластеру и настройка kubectl.   
+на инвентарь, полученный на предыдущем шаге, выполняется установка необходимого ПО, инициализация кластера, подключение worker-нод к кластеру и настройка kubectl .   
 Применять необходимо командой *ANSIBLE_HOST_KEY_CHECKING=False ansible-playbook -i ../hosts.yaml playbook.yml -K*   
-Ключ ANSIBLE_HOST_KEY_CHECKING=False, нужен для того чтобы не мешали запросы fingerprint, *-K* для того чтобы можно было задать пароль пользователя локальной машины, так как в результате выполнения роли k8s_create_cluster , будет создаваться файл на локальной машине для дальнейшего использования ролью node_invite.   
+Ключ ANSIBLE_HOST_KEY_CHECKING=False, нужен для того чтобы не мешали запросы fingerprint, *-K* для того чтобы можно было задать пароль пользователя локальной машины, так как в результате выполнения роли k8s_create_cluster , будет создаваться файл на локальной машине для дальнейшего использования ролью node_invite. 
+
 Применяю:
 ```bash
 user@microk8s:~/devops-diploma-netology/ansible/k8s$ ANSIBLE_HOST_KEY_CHECKING=False ansible-playbook -i ../hosts.yaml playbook.yml -K
@@ -815,8 +816,88 @@ root@astra:/home/user/testdocker# docker run -p 80:80  suntsovvv/web-app-diploma
 4. Http доступ на 80 порту к тестовому приложению.
 
 ## Решение:
+Доступ извне к web-интерфейсу мониторинга и приложению будет обеспечиваться по схеме балансировщик yc --> ingress ngix ---> endpoint.
+Поэтому сначала устанавливаю устанавливаю ingress ngix , взял с официального сайта yaml-файл  "https://raw.githubusercontent.com/kubernetes/ingress-nginx/controller-v1.12.0/deploy/static/provider/cloud/deploy.yaml"   
+Модифицировал его в секции сервиса, т.к. по умолчанию он устанавливается с сервисом LoadBalacer, а на самостоятельно развернутом кластере в YC такой тип балансировщика не работает.
+Меняю тип сервиса на NodePort и настраиваю порт доступа. Балансировщик будет слушать порт 80 и перенаправлять траффик на NodePort.
+```yaml
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    app.kubernetes.io/component: controller
+    app.kubernetes.io/instance: ingress-nginx
+    app.kubernetes.io/name: ingress-nginx
+    app.kubernetes.io/part-of: ingress-nginx
+    app.kubernetes.io/version: 1.12.0
+  name: ingress-nginx-controller
+  namespace: ingress-nginx
+spec:
+  externalTrafficPolicy: Local
+  ipFamilies:
+  - IPv4
+  ipFamilyPolicy: SingleStack
+  ports:
+  - appProtocol: http
+    name: http
+    port: 80
+    protocol: TCP
+    nodePort: 30080
+  - appProtocol: https
+    name: https
+    port: 443
+    protocol: TCP
+    nodePort: 30443
+  selector:
+    app.kubernetes.io/component: controller
+    app.kubernetes.io/instance: ingress-nginx
+    app.kubernetes.io/name: ingress-nginx
+  type: NodePort
+```
+Применяю и проверяю:
+```bash
+ubuntu@k8s-master:~$ kubectl apply -f nginx-ingress.yaml 
+namespace/ingress-nginx created
+serviceaccount/ingress-nginx created
+serviceaccount/ingress-nginx-admission created
+role.rbac.authorization.k8s.io/ingress-nginx created
+role.rbac.authorization.k8s.io/ingress-nginx-admission created
+clusterrole.rbac.authorization.k8s.io/ingress-nginx created
+clusterrole.rbac.authorization.k8s.io/ingress-nginx-admission created
+rolebinding.rbac.authorization.k8s.io/ingress-nginx created
+rolebinding.rbac.authorization.k8s.io/ingress-nginx-admission created
+clusterrolebinding.rbac.authorization.k8s.io/ingress-nginx created
+clusterrolebinding.rbac.authorization.k8s.io/ingress-nginx-admission created
+configmap/ingress-nginx-controller created
+service/ingress-nginx-controller created
+service/ingress-nginx-controller-admission created
+deployment.apps/ingress-nginx-controller created
+job.batch/ingress-nginx-admission-create created
+job.batch/ingress-nginx-admission-patch created
+ingressclass.networking.k8s.io/nginx created
+validatingwebhookconfiguration.admissionregistration.k8s.io/ingress-nginx-admission created
+ubuntu@k8s-master:~$ kubectl -n ingress-nginx get all 
+NAME                                           READY   STATUS      RESTARTS   AGE
+pod/ingress-nginx-admission-create-t8gmf       0/1     Completed   0          82s
+pod/ingress-nginx-admission-patch-5n4cg        0/1     Completed   1          82s
+pod/ingress-nginx-controller-cbb88bdbc-hfnr8   1/1     Running     0          82s
+
+NAME                                         TYPE        CLUSTER-IP       EXTERNAL-IP   PORT(S)                      AGE
+service/ingress-nginx-controller             NodePort    10.108.169.184   <none>        80:30080/TCP,443:30443/TCP   82s
+service/ingress-nginx-controller-admission   ClusterIP   10.101.43.156    <none>        443/TCP                      82s
+
+NAME                                       READY   UP-TO-DATE   AVAILABLE   AGE
+deployment.apps/ingress-nginx-controller   1/1     1            1           82s
+
+NAME                                                 DESIRED   CURRENT   READY   AGE
+replicaset.apps/ingress-nginx-controller-cbb88bdbc   1         1         1       82s
+
+NAME                                       STATUS     COMPLETIONS   DURATION   AGE
+job.batch/ingress-nginx-admission-create   Complete   1/1           8s         82s
+job.batch/ingress-nginx-admission-patch    Complete   1/1           10s        82s
+```
 Для мониторинга буду использовать пакет [kube-prometheus](https://github.com/prometheus-operator/kube-prometheus)   
-Клонирую репозиторий на master-ноду и устанавливаю:   
+Клонирую репозиторий на master-ноду:   
 ```bash
 ubuntu@k8s-master:~$ git clone https://github.com/prometheus-operator/kube-prometheus.git
 Cloning into 'kube-prometheus'...
@@ -826,14 +907,211 @@ remote: Compressing objects: 100% (283/283), done.
 remote: Total 20747 (delta 5164), reused 5020 (delta 5010), pack-reused 15452 (from 2)
 Receiving objects: 100% (20747/20747), 12.99 MiB | 20.49 MiB/s, done.
 Resolving deltas: 100% (14355/14355), done.
-ubuntu@k8s-master:~$ cd kube-prometheus/
+```
+Далее для того чтобы web-интерфейс Grafana работал через ингресс, необходимо выполнить правки в манифестах.   
+grafana-config:
+```yaml
+apiVersion: v1
+kind: Secret
+metadata:
+  labels:
+    app.kubernetes.io/component: grafana
+    app.kubernetes.io/name: grafana
+    app.kubernetes.io/part-of: kube-prometheus
+    app.kubernetes.io/version: 11.4.0
+  name: grafana-config
+  namespace: monitoring
+stringData:
+  grafana.ini: |
+    [date_formats]
+    default_timezone = UTC
+    [server]
+    root_url = http://suntsovvv.ru/grafana
+type: Opaque
+```
+Данный код необходим, чтобы корректно происходил редирект при использовании ингресса. Указал dns имя по которому будут приходить запросы. Данная настройка актуальна для  Grafana версии выше 10.0.0
+```
+    [server]
+    root_url = http://suntsovvv.ru/grafana
+```
+Так же необходимо поправить манифест grafana-networkPolicy.yaml чтобы разрешить входящий траффик: 
+```yaml
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  labels:
+    app.kubernetes.io/component: grafana
+    app.kubernetes.io/name: grafana
+    app.kubernetes.io/part-of: kube-prometheus
+    app.kubernetes.io/version: 11.4.0
+  name: grafana
+  namespace: monitoring
+spec:
+  egress:
+  - {}
+  ingress:
+  - {}
+  policyTypes:
+  - Egress
+  - Ingress
+```
+Выполняю установку системы мониторинг и проверяю:
+```bash
 ubuntu@k8s-master:~/kube-prometheus$ kubectl apply --server-side -f manifests/setup
 kubectl wait \
         --for condition=Established \
         --all CustomResourceDefinition \
         --namespace=monitoring
 kubectl apply -f manifests/
+..................................................................
+ubuntu@k8s-master:~/kube-prometheus$ kubectl -n monitoring get all
+NAME                                      READY   STATUS    RESTARTS   AGE
+pod/alertmanager-main-0                   2/2     Running   0          70s
+pod/alertmanager-main-1                   2/2     Running   0          70s
+pod/alertmanager-main-2                   2/2     Running   0          70s
+pod/blackbox-exporter-649ff58c4f-rhsjj    3/3     Running   0          106s
+pod/grafana-68674dbd6-xv7sq               1/1     Running   0          105s
+pod/kube-state-metrics-65f74b9b4d-p7kvh   3/3     Running   0          105s
+pod/node-exporter-fp56x                   2/2     Running   0          105s
+pod/node-exporter-r2xvv                   2/2     Running   0          105s
+pod/node-exporter-v7sxv                   2/2     Running   0          105s
+pod/prometheus-adapter-5794d7d9f5-f5b2q   1/1     Running   0          104s
+pod/prometheus-adapter-5794d7d9f5-qrs9z   1/1     Running   0          104s
+pod/prometheus-k8s-0                      2/2     Running   0          70s
+pod/prometheus-k8s-1                      2/2     Running   0          70s
+pod/prometheus-operator-d84db789b-fb225   2/2     Running   0          104s
+
+NAME                            TYPE        CLUSTER-IP       EXTERNAL-IP   PORT(S)                      AGE
+service/alertmanager-main       ClusterIP   10.105.29.188    <none>        9093/TCP,8080/TCP            106s
+service/alertmanager-operated   ClusterIP   None             <none>        9093/TCP,9094/TCP,9094/UDP   71s
+service/blackbox-exporter       ClusterIP   10.97.20.87      <none>        9115/TCP,19115/TCP           106s
+service/grafana                 ClusterIP   10.107.62.189    <none>        3000/TCP                     105s
+service/kube-state-metrics      ClusterIP   None             <none>        8443/TCP,9443/TCP            105s
+service/node-exporter           ClusterIP   None             <none>        9100/TCP                     105s
+service/prometheus-adapter      ClusterIP   10.106.44.218    <none>        443/TCP                      104s
+service/prometheus-k8s          ClusterIP   10.100.242.189   <none>        9090/TCP,8080/TCP            104s
+service/prometheus-operated     ClusterIP   None             <none>        9090/TCP                     70s
+service/prometheus-operator     ClusterIP   None             <none>        8443/TCP                     104s
+
+NAME                           DESIRED   CURRENT   READY   UP-TO-DATE   AVAILABLE   NODE SELECTOR            AGE
+daemonset.apps/node-exporter   3         3         3       3            3           kubernetes.io/os=linux   105s
+
+NAME                                  READY   UP-TO-DATE   AVAILABLE   AGE
+deployment.apps/blackbox-exporter     1/1     1            1           106s
+deployment.apps/grafana               1/1     1            1           105s
+deployment.apps/kube-state-metrics    1/1     1            1           105s
+deployment.apps/prometheus-adapter    2/2     2            2           104s
+deployment.apps/prometheus-operator   1/1     1            1           104s
+
+NAME                                            DESIRED   CURRENT   READY   AGE
+replicaset.apps/blackbox-exporter-649ff58c4f    1         1         1       106s
+replicaset.apps/grafana-68674dbd6               1         1         1       105s
+replicaset.apps/kube-state-metrics-65f74b9b4d   1         1         1       105s
+replicaset.apps/prometheus-adapter-5794d7d9f5   2         2         2       104s
+replicaset.apps/prometheus-operator-d84db789b   1         1         1       104s
+
+NAME                                 READY   AGE
+statefulset.apps/alertmanager-main   3/3     70s
+statefulset.apps/prometheus-k8s      2/2     70s
 ```
+Теперь необходимо создать балансировщик и ingress для доступа извне к веб интерфейсу графана.
+Дополняю конфигурацию terraform :
+```hcl
+# Создание групп целей для балансировщика нагрузки
+resource "yandex_lb_target_group" "k8s-cluster" {
+  name = "k8s-cluster"
+  target {
+    subnet_id = yandex_vpc_subnet.ru-central1-a.id
+    address   = yandex_compute_instance.worker-1.network_interface[0].ip_address
+  }
+  target {
+    subnet_id = yandex_vpc_subnet.ru-central1-b.id
+    address   = yandex_compute_instance.worker-2.network_interface[0].ip_address
+  }
+ }
+
+#Создание сетевого балансировщика
+
+resource "yandex_lb_network_load_balancer" "k8s" {
+  name = "k8s-balancer"
+
+  listener {
+    name = "${ var.listener_web_app.name }"
+    port = var.listener_web_app.port
+    target_port = var.listener_web_app.target_port
+
+    external_address_spec {
+      ip_version = "ipv4"
+    }
+  }
+
+  attached_target_group {
+    target_group_id = yandex_lb_target_group.k8s-cluster.id
+    healthcheck {
+      name = "tcp"
+      tcp_options {
+        port = 22
+
+      }
+    }
+  }
+}
+```
+Так же доработал output , чтобы выводились внешние ip и порт балансировщика:
+```
+Outputs:
+
+all_vms = {
+  "bastion-nat" = [
+    {
+      "name" = "bastion-nat"
+      "nat_ip_address" = "89.169.139.110"
+    },
+  ]
+  "master" = [
+    {
+      "ip_address" = "10.10.1.24"
+      "name" = "k8s-master"
+    },
+  ]
+}
+listener_sockets = [
+  {
+    "address" = "158.160.133.135"
+    "name" = "web-app"
+    "port" = 80
+  },
+]
+```
+![image](https://github.com/user-attachments/assets/202fe643-389f-46c8-8c01-94dcbaa7e4b2)
+Пишу манифест ingress для grafana:
+```yaml
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: monitoring-ingress
+  namespace: monitoring
+  annotations:
+    nginx.ingress.kubernetes.io/ssl-redirect: "false"
+spec:
+  ingressClassName: nginx
+  rules:
+  - host: suntsovvv.ru
+    http:
+      paths:
+      - path: /grafana
+        pathType: Prefix
+        backend:
+          service:
+            name: grafana
+            port:
+              number: 3000
+```
+Применяю и проверяю через web, для проверки добавил в запись в hosts файл машины ( <ip балансирщка>  suntsovvv.ru)   
+Web-интерфейс Grafana доступен на 80-м порту по адресу http://suntsovvv.ru/grafana/
+
+![image](https://github.com/user-attachments/assets/7fe5037b-1c18-40d5-a712-1011fdc6e46f)
+
 Проверяю сервисы которые поднялись и смотрю поты:
 ```bash
 ubuntu@k8s-master:~/kube-prometheus$ kubectl -n monitoring get svc
