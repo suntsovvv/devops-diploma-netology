@@ -27,15 +27,15 @@ resource "yandex_lb_network_load_balancer" "k8s" {
     }
   }
 
-  listener {
-    name = "${ var.listener_grafana.name }"
-    port = var.listener_grafana.port
-    target_port = var.listener_grafana.target_port
+  # listener {
+  #   name = "${ var.listener_grafana.name }"
+  #   port = var.listener_grafana.port
+  #   target_port = var.listener_grafana.target_port
 
-    external_address_spec {
-      ip_version = "ipv4"
-    }
-  }
+  #   external_address_spec {
+  #     ip_version = "ipv4"
+  #   }
+  # }
 
 
   attached_target_group {
