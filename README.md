@@ -1,4 +1,4 @@
-# Дипломный практикум в Yandex.Cloud
+# Дипломный практикум Сунцова Вадима Валерьевича в Yandex.Cloud. 
   * [Цели:](#цели)
   * [Этапы выполнения:](#этапы-выполнения)
      * [Создание облачной инфраструктуры](#создание-облачной-инфраструктуры)
@@ -1294,14 +1294,73 @@ Current runner version: '2.321.0'
 2025-02-01 05:25:17Z: Listening for Jobs
 ```
 ![image](https://github.com/user-attachments/assets/02004eef-6e12-49a4-adbe-1b6063f0d4b8)
-Далее необходимо написать pipeline 
+Далее необходимо написать workflow:
 ```yaml
+name: Build and Deploy to Kubernetes
+
+on:
+  push:
+    branches:
+      - main
+    tags:
+      - 'v*'
+env:
+  IMAGE_NAME: suntsovvv/web-app-diploma
+  NAMESPACE: web-app-diploma
+  DEPLOYMENT_NAME: web-app-diploma
+
+jobs:
+  build:
+    runs-on: self-hosted
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Determine Docker tag
+        run: |
+          if [[ "${{ github.ref }}" == "refs/heads/main" ]]; then
+            echo "TAG=latest" >> $GITHUB_ENV
+          elif [[ "${{ github.ref }}" == refs/tags/* ]]; then
+            echo "TAG=${GITHUB_REF#refs/tags/}" >> $GITHUB_ENV
+          fi
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_TOKEN }}
+          
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./Dockerfile
+          push: true 
+          tags: |
+            ${{ env.IMAGE_NAME }}:${{ env.TAG }}
+                 
+  deploy:
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: self-hosted
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      - name: Set tag to env
+        run: |
+           if [[ "${{ github.ref }}" == refs/tags/* ]]; then
+            echo "TAG=${GITHUB_REF#refs/tags/}" >> $GITHUB_ENV
+           fi 
+      - name: Deploy to Kubernetes
+       
+        run: |
+          kubectl set image deployment/${{ env.DEPLOYMENT_NAME }} ${{ env.DEPLOYMENT_NAME }}=${{ env.IMAGE_NAME }}:${{ env.TAG }} -n ${{ env.NAMESPACE }}
+          kubectl rollout status deployment/${{ env.DEPLOYMENT_NAME }} -n ${{ env.NAMESPACE }}
 ```
 Добавляю необходимые секреты:
 ![image](https://github.com/user-attachments/assets/5d32fb24-ecb4-4725-94e8-3d36229657fa)
 
-
-
+Проверяю:
 ```bash
 user@microk8s:~$ git clone https://github.com/suntsovvv/web-app-diploma.git
 Cloning into 'web-app-diploma'...
@@ -1336,16 +1395,29 @@ To github.com:suntsovvv/web-app-diploma.git
 
 Проверяем условие "При создании тега (например, v1.0.0) происходит сборка и отправка с соответствующим label в регистри, а также деплой соответствующего Docker образа в кластер Kubernetes"
 ```bash
-
+user@microk8s:~/web-app-diploma$ git tag v1.0.6
+user@microk8s:~/web-app-diploma$ git push origin v1.0.6
+Total 0 (delta 0), reused 0 (delta 0), pack-reused 0
+To github.com:suntsovvv/web-app-diploma.git
+ * [new tag]         v1.0.6 -> v1.0.6
+user@microk8s:~/web-app-diploma$ 
 ```
+![image](https://github.com/user-attachments/assets/3918a36f-f4ee-4bfa-b387-34f26dc1a7ff)
+![image](https://github.com/user-attachments/assets/65a23e4c-8664-482f-93d4-2f69ee3762c9)
+Создался образ на DockerHub:
+![image](https://github.com/user-attachments/assets/f4dbb4fb-34ae-4f67-99ac-abdec3e56564)
+Приложение обновилось:
+![image](https://github.com/user-attachments/assets/6088c17e-89d0-47c7-92bf-936fe412fb59)
+
+
 ---
 
 ## Что необходимо для сдачи задания?
 
-1. Репозиторий с конфигурационными файлами Terraform и готовность продемонстрировать создание всех ресурсов с нуля.
+1. Репозиторий с конфигурационными файлами Terraform и готовность продемонстрировать создание всех ресурсов с нуля. [Terraform](https://github.com/suntsovvv/devops-diploma-netology/tree/main/terraform)
 2. Пример pull request с комментариями созданными atlantis'ом или снимки экрана из Terraform Cloud или вашего CI-CD-terraform pipeline.
-3. Репозиторий с конфигурацией ansible, если был выбран способ создания Kubernetes кластера при помощи ansible.
-4. Репозиторий с Dockerfile тестового приложения и ссылка на собранный docker image.
-5. Репозиторий с конфигурацией Kubernetes кластера.
-6. Ссылка на тестовое приложение и веб интерфейс Grafana с данными доступа.
+3. Репозиторий с конфигурацией ansible, если был выбран способ создания Kubernetes кластера при помощи ansible.[ansible](https://github.com/suntsovvv/devops-diploma-netology/tree/main/ansible/k8s)
+4. Репозиторий с Dockerfile тестового приложения и ссылка на собранный docker image.[web-app-diploma](https://github.com/suntsovvv/web-app-diploma)
+5. Репозиторий с конфигурацией Kubernetes кластера. [Kubernetes]
+6. Ссылка на тестовое приложение и веб интерфейс Grafana с данными доступа. 
 7. Все репозитории рекомендуется хранить на одном ресурсе (github, gitlab)
