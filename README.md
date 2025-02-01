@@ -1244,8 +1244,78 @@ ingress.networking.k8s.io/web-ingress created
 1. Интерфейс ci/cd сервиса доступен по http.
 2. При любом коммите в репозиторие с тестовым приложением происходит сборка и отправка в регистр Docker образа.
 3. При создании тега (например, v1.0.0) происходит сборка и отправка с соответствующим label в регистри, а также деплой соответствующего Docker образа в кластер Kubernetes.
+## Решение   
+
+Для ci/cd буду испльзовать web-версию GitHub Actions.
+Создаю раннер в директории моего проекта:   
+Устанавливаю и запускаю раннер на master-ноде кластера
+```bash
+ubuntu@k8s-master:~/actions-runner$ ./config.sh --url https://github.com/suntsovvv/web-app-diploma --token XXXXXXXXXXXXXXXXXXXX
+
+--------------------------------------------------------------------------------
+|        ____ _ _   _   _       _          _        _   _                      |
+|       / ___(_) |_| | | |_   _| |__      / \   ___| |_(_) ___  _ __  ___      |
+|      | |  _| | __| |_| | | | | '_ \    / _ \ / __| __| |/ _ \| '_ \/ __|     |
+|      | |_| | | |_|  _  | |_| | |_) |  / ___ \ (__| |_| | (_) | | | \__ \     |
+|       \____|_|\__|_| |_|\__,_|_.__/  /_/   \_\___|\__|_|\___/|_| |_|___/     |
+|                                                                              |
+|                       Self-hosted runner registration                        |
+|                                                                              |
+--------------------------------------------------------------------------------
+
+# Authentication
+
+
+√ Connected to GitHub
+
+# Runner Registration
+
+Enter the name of the runner group to add this runner to: [press Enter for Default] 
+
+Enter the name of runner: [press Enter for k8s-master] 
+
+This runner will have the following labels: 'self-hosted', 'Linux', 'X64' 
+Enter any additional labels (ex. label-1,label-2): [press Enter to skip] 
+
+√ Runner successfully added
+√ Runner connection is good
+
+# Runner settings
+
+Enter name of work folder: [press Enter for _work] 
+
+√ Settings Saved.
+
+ubuntu@k8s-master:~/actions-runner$ ./run.sh
+
+√ Connected to GitHub
+
+Current runner version: '2.321.0'
+2025-02-01 05:25:17Z: Listening for Jobs
+```
+![image](https://github.com/user-attachments/assets/02004eef-6e12-49a4-adbe-1b6063f0d4b8)
+Далее необходимо написать pipeline 
+```yaml
+```
+Добавляю необходимые секреты:
+![image](https://github.com/user-attachments/assets/5d32fb24-ecb4-4725-94e8-3d36229657fa)
+
+
+
+```bash
+user@microk8s:~$ git clone https://github.com/suntsovvv/web-app-diploma.git
+Cloning into 'web-app-diploma'...
+remote: Enumerating objects: 77, done.
+remote: Counting objects: 100% (77/77), done.
+remote: Compressing objects: 100% (52/52), done.
+remote: Total 77 (delta 17), reused 2 (delta 0), pack-reused 0 (from 0)
+Receiving objects: 100% (77/77), 18.90 KiB | 2.70 MiB/s, done.
+Resolving deltas: 100% (17/17), done.
+user@microk8s:~$ cd web-app-diploma/
+```
 
 ---
+
 ## Что необходимо для сдачи задания?
 
 1. Репозиторий с конфигурационными файлами Terraform и готовность продемонстрировать создание всех ресурсов с нуля.
