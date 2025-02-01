@@ -1313,7 +1313,31 @@ Receiving objects: 100% (77/77), 18.90 KiB | 2.70 MiB/s, done.
 Resolving deltas: 100% (17/17), done.
 user@microk8s:~$ cd web-app-diploma/
 ```
+Проверяем условие "При любом коммите в репозиторие с тестовым приложением происходит сборка и отправка в регистр Docker образа"
+```bash
+user@microk8s:~/web-app-diploma$ git commit -m "no tag"
+[main 956afd7] no tag
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+user@microk8s:~/web-app-diploma$ git push origin main
+Enumerating objects: 5, done.
+Counting objects: 100% (5/5), done.
+Delta compression using up to 2 threads
+Compressing objects: 100% (3/3), done.
+Writing objects: 100% (3/3), 273 bytes | 273.00 KiB/s, done.
+Total 3 (delta 2), reused 0 (delta 0), pack-reused 0
+remote: Resolving deltas: 100% (2/2), completed with 2 local objects.
+To github.com:suntsovvv/web-app-diploma.git
+   ba3ba5e..956afd7  main -> main
+```
+Видим , чтоо actions отработал и при этом deploy в k8s не был запущен:
+![image](https://github.com/user-attachments/assets/3b330ae1-015c-45ef-bb02-93a14a0ebb29)
+На DockerHud запушился новый образ с тегом "latest"
+![image](https://github.com/user-attachments/assets/475433c6-79ac-4c7e-8e3e-d9fac274fe99)
 
+Проверяем условие "При создании тега (например, v1.0.0) происходит сборка и отправка с соответствующим label в регистри, а также деплой соответствующего Docker образа в кластер Kubernetes"
+```bash
+
+```
 ---
 
 ## Что необходимо для сдачи задания?
