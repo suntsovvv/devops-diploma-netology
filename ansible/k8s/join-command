@@ -1,1 +1,0 @@
-kubeadm join 10.10.1.24:6443 --token yvzneg.i5sk5lzhqklxzfuu --discovery-token-ca-cert-hash sha256:fdbd3460df2bcbf9d7fc04cb95018b1fb5db8b3f988d2e325e016f05f54072ca 
