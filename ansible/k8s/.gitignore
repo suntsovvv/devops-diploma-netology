@@ -9,3 +9,6 @@
 # own secret vars store.
 personal.auto.tfvars
 secret*
+
+# join command
+join-command*
